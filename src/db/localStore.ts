@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Pool } from 'pg';
 import { adminDb, hasAdminServiceAccount } from '../lib/firebase-admin.ts';
 
 export interface StoredUser {
@@ -156,6 +157,51 @@ const DATA_DIR = IS_SERVERLESS
   : path.resolve(process.cwd(), '.data');
 const STORE_PATH = path.join(DATA_DIR, 'cbt-store.json');
 
+const POSTGRES_URL =
+  process.env.DATABASE_URL?.trim() ||
+  process.env.POSTGRES_URL?.trim() ||
+  process.env.POSTGRES_PRISMA_URL?.trim() ||
+  '';
+
+let pgPool: Pool | null = null;
+let pgTableReady = false;
+
+function getPgPool(): Pool | null {
+  if (!POSTGRES_URL) return null;
+  if (!pgPool) {
+    const isLocal =
+      POSTGRES_URL.includes('localhost') ||
+      POSTGRES_URL.includes('127.0.0.1');
+    pgPool = new Pool({
+      connectionString: POSTGRES_URL,
+      max: 3,
+      ssl: isLocal ? undefined : { rejectUnauthorized: false },
+    });
+  }
+  return pgPool;
+}
+
+async function ensurePgTable(pool: Pool): Promise<void> {
+  if (pgTableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cbt_app_state (
+      id TEXT PRIMARY KEY,
+      version INTEGER NOT NULL DEFAULT 1,
+      state_json TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  pgTableReady = true;
+}
+
+export function isServerlessEnv(): boolean {
+  return IS_SERVERLESS;
+}
+
+export function hasPersistentDatabase(): boolean {
+  return Boolean(POSTGRES_URL || (hasAdminServiceAccount && adminDb));
+}
+
 function emptyState(): StoreState {
   return {
     counters: {
@@ -266,7 +312,42 @@ function buildSnapshotMap(state: StoreState): Map<string, string> {
 }
 
 export async function initStore(): Promise<void> {
-  if (hasAdminServiceAccount && adminDb) {
+  const pool = getPgPool();
+  if (pool) {
+    if (initInFlight) {
+      await initInFlight;
+      return;
+    }
+    initInFlight = (async () => {
+      try {
+        await ensurePgTable(pool);
+        const metaRes = await pool.query<{ version: number }>(
+          'SELECT version FROM cbt_app_state WHERE id = $1',
+          ['primary']
+        );
+        if (metaRes.rows.length > 0) {
+          const incomingVersion = Number(metaRes.rows[0].version ?? 0);
+          if (cachedState && remoteVersion === incomingVersion) {
+            return;
+          }
+          const dataRes = await pool.query<{ version: number; state_json: string }>(
+            'SELECT version, state_json FROM cbt_app_state WHERE id = $1',
+            ['primary']
+          );
+          if (dataRes.rows.length > 0) {
+            cachedState = hydrateState(JSON.parse(dataRes.rows[0].state_json));
+            remoteVersion = Number(dataRes.rows[0].version ?? incomingVersion);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load store from PostgreSQL:', err);
+      } finally {
+        initInFlight = null;
+      }
+    })();
+    await initInFlight;
+  } else if (hasAdminServiceAccount && adminDb) {
     const db = adminDb;
     if (initInFlight) {
       await initInFlight;
@@ -349,7 +430,30 @@ export async function saveStore(): Promise<void> {
     }
   }
 
-  if (hasAdminServiceAccount && adminDb) {
+  const pool = getPgPool();
+  if (pool) {
+    try {
+      await ensurePgTable(pool);
+      const nextVersion = Math.max(0, remoteVersion) + 1;
+      await pool.query(
+        `
+          INSERT INTO cbt_app_state (id, version, state_json, updated_at)
+          VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (id) DO UPDATE SET
+            version = EXCLUDED.version,
+            state_json = EXCLUDED.state_json,
+            updated_at = NOW();
+        `,
+        ['primary', nextVersion, JSON.stringify(state)]
+      );
+      remoteVersion = nextVersion;
+    } catch (err) {
+      console.error('Failed to sync store to PostgreSQL:', err);
+      if (IS_SERVERLESS) {
+        throw new Error('Gagal menyimpan data ke database PostgreSQL.');
+      }
+    }
+  } else if (hasAdminServiceAccount && adminDb) {
     try {
       const nextSnapshot = buildSnapshotMap(state);
       const ops: Array<{

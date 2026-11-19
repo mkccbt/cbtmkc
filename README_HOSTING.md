@@ -5,9 +5,11 @@ Proyek ini sudah dilengkapi `vercel.json` dan serverless handler `api/index.js` 
 
 Atur **Environment Variables** berikut di **Vercel Project Settings → Environment Variables**:
 - `SESSION_SECRET`: string acak minimal 32 karakter (wajib sama antar serverless instance agar token login siswa/guru/super admin tetap valid).
-- `FIREBASE_SERVICE_ACCOUNT_JSON`: isi JSON (atau string base64 dari JSON) **Firebase Service Account Key** dari Firebase Console (*Project Settings → Service accounts → Generate new private key*) agar seluruh data (akun siswa/guru, bank soal, ujian, jawaban, dan audit log) tersimpan **permanen** di Cloud Firestore (`ai-studio-remixsakaujiancb-e0846e26-5263-42b1-acea-b52700abc083`).
+- **Pilih salah satu database permanen** agar akun siswa, guru, bank soal, ujian, dan nilai tersimpan permanen antar serverless instance:
+  1. **PostgreSQL (`DATABASE_URL` atau `POSTGRES_URL` — Paling Mudah / Gratis)**: Hubungkan **Neon** atau **Supabase** langsung dari tab **Storage** di dashboard Vercel (otomatis mengisi `DATABASE_URL` / `POSTGRES_URL`).
+  2. **Firebase Admin (`FIREBASE_SERVICE_ACCOUNT_JSON`)**: Isi JSON (atau base64) **Firebase Service Account Key** bila memakai proyek Firebase standar dengan IAM aktif.
 
-> **Catatan**: Jika `FIREBASE_SERVICE_ACCOUNT_JSON` belum diisi, Vercel tetap dapat menjalankan login demo menggunakan penyimpanan sementara di `/tmp`, namun data perubahan akan kembali ke bawaan awal saat serverless function restart.
+> **Penting**: Tanpa `DATABASE_URL`/`POSTGRES_URL` atau `FIREBASE_SERVICE_ACCOUNT_JSON`, Vercel tidak memiliki penyimpanan permanen antar-instance sehingga penambahan/impor siswa tidak akan tersimpan permanen.
 
 ## 2. Menjalankan Secara Lokal / VPS Node.js
 ```bash

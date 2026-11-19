@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { adminAuth } from '../lib/firebase-admin.ts';
 import { verifyCsrfToken, verifySessionToken } from '../lib/security.ts';
 import { getOrCreateFirebaseUser, getUserById } from '../db/repository.ts';
+import { hasPersistentDatabase, isServerlessEnv } from '../db/localStore.ts';
 
 export type AppUserRole = 'super_admin' | 'guru' | 'siswa';
 
@@ -125,6 +126,17 @@ export const requireCsrf = (
   if (!verifyCsrfToken(token, req.authUser.uid)) {
     return res.status(403).json({
       error: 'Token keamanan CSRF tidak valid atau kedaluwarsa. Muat ulang sesi Anda.',
+    });
+  }
+  const pathUrl = req.originalUrl || req.url || '';
+  if (
+    isServerlessEnv() &&
+    !hasPersistentDatabase() &&
+    (pathUrl.startsWith('/api/teacher/') || pathUrl.startsWith('/api/admin/'))
+  ) {
+    return res.status(503).json({
+      error:
+        'Database permanen belum terhubung di Vercel sehingga data tidak dapat disimpan permanen. Hubungkan PostgreSQL (Neon/Supabase di Vercel Storage agar DATABASE_URL / POSTGRES_URL aktif) atau atur FIREBASE_SERVICE_ACCOUNT_JSON di Environment Variables Vercel, lalu Redeploy.',
     });
   }
   return next();

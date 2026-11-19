@@ -229,7 +229,7 @@ export async function importStudentAccountsBatch(
       email: null as string | null,
       role: 'siswa',
       className: item.className.trim() || 'Umum',
-      passwordHash: await bcrypt.hash(item.pin, 10),
+      passwordHash: await bcrypt.hash(item.pin, 8),
       accessPin: item.pin,
       createdAt: now,
     }))

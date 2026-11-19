@@ -133,15 +133,26 @@ export function StudentAccountsView() {
     setFormError(null);
     setSaving(true);
     try {
-      await api.request('/api/teacher/students', {
-        method: 'POST',
-        body: JSON.stringify({ username, name, className, pin }),
-      });
+      const res = await api.request<{ student: StudentAccount }>(
+        '/api/teacher/students',
+        {
+          method: 'POST',
+          body: JSON.stringify({ username, name, className, pin }),
+        }
+      );
       setModalOpen(false);
       setUsername('');
       setName('');
       setPin('123456');
-      setSuccessMsg('Akun siswa baru berhasil ditambahkan.');
+      if (res.student) {
+        setStudents((prev) => [
+          res.student,
+          ...prev.filter((s) => s.id !== res.student.id),
+        ]);
+      }
+      setSuccessMsg(
+        `Akun siswa "${res.student?.username || username}" berhasil ditambahkan dan siap digunakan untuk login.`
+      );
       await loadData();
     } catch (err: any) {
       setFormError(err.message || 'Gagal menambah siswa.');
@@ -224,6 +235,7 @@ export function StudentAccountsView() {
       const res = await api.request<{
         importedCount: number;
         skippedUsernames: string[];
+        students?: StudentAccount[];
       }>('/api/teacher/students/import', {
         method: 'POST',
         body: JSON.stringify({
@@ -236,6 +248,12 @@ export function StudentAccountsView() {
         }),
       });
       setImportOpen(false);
+      if (Array.isArray(res.students) && res.students.length > 0) {
+        setStudents((prev) => {
+          const addedIds = new Set(res.students!.map((s) => s.id));
+          return [...res.students!, ...prev.filter((s) => !addedIds.has(s.id))];
+        });
+      }
       const skippedText =
         res.skippedUsernames.length > 0
           ? ` (${res.skippedUsernames.length} username sudah terdaftar dilewati: ${res.skippedUsernames
@@ -627,9 +645,13 @@ export function StudentAccountsView() {
                   required
                   minLength={3}
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) =>
+                    setUsername(
+                      e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '')
+                    )
+                  }
                   placeholder="Contoh: siswa04"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono"
                 />
               </div>
               <div>
