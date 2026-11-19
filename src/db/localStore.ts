@@ -157,11 +157,28 @@ const DATA_DIR = IS_SERVERLESS
   : path.resolve(process.cwd(), '.data');
 const STORE_PATH = path.join(DATA_DIR, 'cbt-store.json');
 
-const POSTGRES_URL =
-  process.env.DATABASE_URL?.trim() ||
-  process.env.POSTGRES_URL?.trim() ||
-  process.env.POSTGRES_PRISMA_URL?.trim() ||
-  '';
+function resolvePostgresUrl(): string {
+  const direct =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.DATABASE_URL_UNPOOLED;
+  if (direct?.trim()) return direct.trim();
+
+  for (const [key, val] of Object.entries(process.env)) {
+    if (
+      val &&
+      (key.endsWith('_DATABASE_URL') || key.endsWith('_POSTGRES_URL')) &&
+      (val.startsWith('postgres://') || val.startsWith('postgresql://'))
+    ) {
+      return val.trim();
+    }
+  }
+  return '';
+}
+
+const POSTGRES_URL = resolvePostgresUrl();
 
 let pgPool: Pool | null = null;
 let pgTableReady = false;
