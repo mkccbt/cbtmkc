@@ -42,7 +42,7 @@ import {
   updateSchoolSettings,
   verifyProctorPinAndUnlock,
 } from './src/db/repository.ts';
-import { getStorageMode } from './src/db/localStore.ts';
+import { getStorageDiagnostics } from './src/db/localStore.ts';
 import { ensureSeeded } from './src/db/seed.ts';
 import {
   issueCsrfToken,
@@ -77,7 +77,7 @@ app.use(cookieParser());
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
-    storageMode: getStorageMode(),
+    ...getStorageDiagnostics(),
     serverTime: new Date().toISOString(),
   });
 });

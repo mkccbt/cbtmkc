@@ -136,7 +136,7 @@ export const requireCsrf = (
   ) {
     return res.status(503).json({
       error:
-        'Database permanen belum terhubung di Vercel sehingga data tidak dapat disimpan permanen. Hubungkan PostgreSQL (Neon/Supabase di Vercel Storage agar DATABASE_URL / POSTGRES_URL aktif) atau atur FIREBASE_SERVICE_ACCOUNT_JSON di Environment Variables Vercel, lalu Redeploy.',
+        'Database permanen belum terhubung di Vercel sehingga data tidak dapat disimpan permanen. Hubungkan PostgreSQL (Neon/Supabase) atau Upstash Redis di Vercel Storage (agar DATABASE_URL / POSTGRES_URL / KV_REST_API_URL aktif), atau atur FIREBASE_SERVICE_ACCOUNT_JSON di Environment Variables Vercel, lalu Redeploy.',
     });
   }
   return next();

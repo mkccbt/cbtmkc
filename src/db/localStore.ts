@@ -157,17 +157,24 @@ const DATA_DIR = IS_SERVERLESS
   : path.resolve(process.cwd(), '.data');
 const STORE_PATH = path.join(DATA_DIR, 'cbt-store.json');
 
+function stripQuotes(val: string | undefined): string {
+  if (!val) return '';
+  return val.trim().replace(/^['"]+|['"]+$/g, '').trim();
+}
+
 function resolvePostgresUrl(): string {
   const direct =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_PRISMA_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.DATABASE_URL_UNPOOLED;
-  if (direct?.trim()) return direct.trim();
+    stripQuotes(process.env.DATABASE_URL) ||
+    stripQuotes(process.env.POSTGRES_URL) ||
+    stripQuotes(process.env.POSTGRES_PRISMA_URL) ||
+    stripQuotes(process.env.POSTGRES_URL_NON_POOLING) ||
+    stripQuotes(process.env.DATABASE_URL_UNPOOLED);
+  if (direct && (direct.startsWith('postgres://') || direct.startsWith('postgresql://'))) {
+    return direct;
+  }
 
   for (const [, val] of Object.entries(process.env)) {
-    const trimmed = val?.trim();
+    const trimmed = stripQuotes(val);
     if (
       trimmed &&
       (trimmed.startsWith('postgres://') ||
@@ -177,10 +184,10 @@ function resolvePostgresUrl(): string {
     }
   }
 
-  const pgHost = process.env.PGHOST || process.env.POSTGRES_HOST;
-  const pgUser = process.env.PGUSER || process.env.POSTGRES_USER;
-  const pgPass = process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD;
-  const pgDb = process.env.PGDATABASE || process.env.POSTGRES_DATABASE;
+  const pgHost = stripQuotes(process.env.PGHOST || process.env.POSTGRES_HOST);
+  const pgUser = stripQuotes(process.env.PGUSER || process.env.POSTGRES_USER);
+  const pgPass = stripQuotes(process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD);
+  const pgDb = stripQuotes(process.env.PGDATABASE || process.env.POSTGRES_DATABASE);
   if (pgHost && pgUser && pgPass && pgDb) {
     return `postgresql://${encodeURIComponent(pgUser)}:${encodeURIComponent(pgPass)}@${pgHost}/${encodeURIComponent(pgDb)}?sslmode=require`;
   }
@@ -189,11 +196,30 @@ function resolvePostgresUrl(): string {
 }
 
 const POSTGRES_URL = resolvePostgresUrl();
+const REDIS_REST_URL =
+  stripQuotes(process.env.KV_REST_API_URL) ||
+  stripQuotes(process.env.UPSTASH_REDIS_REST_URL);
+const REDIS_REST_TOKEN =
+  stripQuotes(process.env.KV_REST_API_TOKEN) ||
+  stripQuotes(process.env.UPSTASH_REDIS_REST_TOKEN);
+const HAS_REDIS_REST = Boolean(REDIS_REST_URL && REDIS_REST_TOKEN);
 
-export function getStorageMode(): 'postgres' | 'firestore' | 'ephemeral' {
+export function getStorageMode(): 'postgres' | 'redis' | 'firestore' | 'ephemeral' {
   if (POSTGRES_URL) return 'postgres';
+  if (HAS_REDIS_REST) return 'redis';
   if (hasAdminServiceAccount && adminDb) return 'firestore';
   return 'ephemeral';
+}
+
+export function getStorageDiagnostics() {
+  return {
+    storageMode: getStorageMode(),
+    vercelEnv: process.env.VERCEL_ENV || null,
+    isServerless: IS_SERVERLESS,
+    hasPostgresUrl: Boolean(POSTGRES_URL),
+    hasRedisRest: HAS_REDIS_REST,
+    hasFirebaseAdminKey: Boolean(hasAdminServiceAccount && adminDb),
+  };
 }
 
 let pgPool: Pool | null = null;
@@ -232,7 +258,7 @@ export function isServerlessEnv(): boolean {
 }
 
 export function hasPersistentDatabase(): boolean {
-  return Boolean(POSTGRES_URL || (hasAdminServiceAccount && adminDb));
+  return Boolean(POSTGRES_URL || HAS_REDIS_REST || (hasAdminServiceAccount && adminDb));
 }
 
 function emptyState(): StoreState {
@@ -380,6 +406,43 @@ export async function initStore(): Promise<void> {
       }
     })();
     await initInFlight;
+  } else if (HAS_REDIS_REST) {
+    if (initInFlight) {
+      await initInFlight;
+      return;
+    }
+    initInFlight = (async () => {
+      try {
+        const verRes = await fetch(`${REDIS_REST_URL}/get/mkc_cbt:version`, {
+          headers: { Authorization: `Bearer ${REDIS_REST_TOKEN}` },
+        });
+        if (verRes.ok) {
+          const verJson = (await verRes.json()) as { result?: string | null };
+          const incomingVersion = Number(verJson?.result ?? 0);
+          if (cachedState && incomingVersion > 0 && remoteVersion === incomingVersion) {
+            return;
+          }
+          if (incomingVersion > 0) {
+            const stateRes = await fetch(`${REDIS_REST_URL}/get/mkc_cbt:state`, {
+              headers: { Authorization: `Bearer ${REDIS_REST_TOKEN}` },
+            });
+            if (stateRes.ok) {
+              const stateJson = (await stateRes.json()) as { result?: string | null };
+              if (stateJson?.result) {
+                cachedState = hydrateState(JSON.parse(stateJson.result));
+                remoteVersion = incomingVersion;
+                return;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load store from Redis REST:', err);
+      } finally {
+        initInFlight = null;
+      }
+    })();
+    await initInFlight;
   } else if (hasAdminServiceAccount && adminDb) {
     const db = adminDb;
     if (initInFlight) {
@@ -484,6 +547,30 @@ export async function saveStore(): Promise<void> {
       console.error('Failed to sync store to PostgreSQL:', err);
       if (IS_SERVERLESS) {
         throw new Error('Gagal menyimpan data ke database PostgreSQL.');
+      }
+    }
+  } else if (HAS_REDIS_REST) {
+    try {
+      const nextVersion = Math.max(0, remoteVersion) + 1;
+      const pipeRes = await fetch(`${REDIS_REST_URL}/pipeline`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${REDIS_REST_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([
+          ['SET', 'mkc_cbt:state', JSON.stringify(state)],
+          ['SET', 'mkc_cbt:version', String(nextVersion)],
+        ]),
+      });
+      if (!pipeRes.ok) {
+        throw new Error(`Redis REST status ${pipeRes.status}`);
+      }
+      remoteVersion = nextVersion;
+    } catch (err) {
+      console.error('Failed to sync store to Redis REST:', err);
+      if (IS_SERVERLESS) {
+        throw new Error('Gagal menyimpan data ke database Redis.');
       }
     }
   } else if (hasAdminServiceAccount && adminDb) {
