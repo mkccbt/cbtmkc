@@ -42,6 +42,7 @@ import {
   updateSchoolSettings,
   verifyProctorPinAndUnlock,
 } from './src/db/repository.ts';
+import { getStorageMode } from './src/db/localStore.ts';
 import { ensureSeeded } from './src/db/seed.ts';
 import {
   issueCsrfToken,
@@ -74,7 +75,11 @@ app.use(express.json({ limit: '20mb' }));
 app.use(cookieParser());
 
 app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', serverTime: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    storageMode: getStorageMode(),
+    serverTime: new Date().toISOString(),
+  });
 });
 
 app.use('/api', async (req: Request, _res: Response, next: NextFunction) => {

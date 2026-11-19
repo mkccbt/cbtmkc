@@ -166,19 +166,35 @@ function resolvePostgresUrl(): string {
     process.env.DATABASE_URL_UNPOOLED;
   if (direct?.trim()) return direct.trim();
 
-  for (const [key, val] of Object.entries(process.env)) {
+  for (const [, val] of Object.entries(process.env)) {
+    const trimmed = val?.trim();
     if (
-      val &&
-      (key.endsWith('_DATABASE_URL') || key.endsWith('_POSTGRES_URL')) &&
-      (val.startsWith('postgres://') || val.startsWith('postgresql://'))
+      trimmed &&
+      (trimmed.startsWith('postgres://') ||
+        trimmed.startsWith('postgresql://'))
     ) {
-      return val.trim();
+      return trimmed;
     }
   }
+
+  const pgHost = process.env.PGHOST || process.env.POSTGRES_HOST;
+  const pgUser = process.env.PGUSER || process.env.POSTGRES_USER;
+  const pgPass = process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD;
+  const pgDb = process.env.PGDATABASE || process.env.POSTGRES_DATABASE;
+  if (pgHost && pgUser && pgPass && pgDb) {
+    return `postgresql://${encodeURIComponent(pgUser)}:${encodeURIComponent(pgPass)}@${pgHost}/${encodeURIComponent(pgDb)}?sslmode=require`;
+  }
+
   return '';
 }
 
 const POSTGRES_URL = resolvePostgresUrl();
+
+export function getStorageMode(): 'postgres' | 'firestore' | 'ephemeral' {
+  if (POSTGRES_URL) return 'postgres';
+  if (hasAdminServiceAccount && adminDb) return 'firestore';
+  return 'ephemeral';
+}
 
 let pgPool: Pool | null = null;
 let pgTableReady = false;
