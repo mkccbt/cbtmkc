@@ -126,8 +126,17 @@ export function SchoolSettingsView({ onUpdated }: SchoolSettingsViewProps) {
             <span className="font-mono text-slate-400">Live Preview</span>
           </div>
           <div className="bg-[#009b4d] text-white px-5 py-3 flex items-center justify-between gap-4">
-            <div className="font-display font-bold text-base sm:text-lg tracking-wide truncate">
-              {schoolName || 'NAMA SEKOLAH'}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-white/95 p-0.5 flex items-center justify-center shrink-0">
+                <img
+                  src="/assets/aistudio/Kabupaten_mempawah_29057062.png"
+                  alt={`Logo ${schoolName || 'SEKOLAH'}`}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="font-display font-bold text-base sm:text-lg tracking-wide truncate">
+                {schoolName || 'NAMA SEKOLAH'}
+              </div>
             </div>
             <div className="font-mono text-xs sm:text-sm tabular-nums text-emerald-50 shrink-0">
               08.30.00

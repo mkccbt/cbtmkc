@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
-  BookOpenCheck,
   Building2,
   CalendarCheck,
   CheckCircle2,
@@ -155,8 +154,12 @@ export function LoginView({
       <header className="bg-[#009b4d] text-white px-5 sm:px-10 py-3.5">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-6">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
-              <BookOpenCheck className="w-4 h-4 text-white" />
+            <div className="w-9 h-9 rounded-lg bg-white/95 p-0.5 flex items-center justify-center shrink-0 shadow-xs">
+              <img
+                src="/assets/aistudio/Kabupaten_mempawah_29057062.png"
+                alt={`Logo ${schoolName}`}
+                className="w-full h-full object-contain"
+              />
             </div>
             <span className="font-display text-base sm:text-xl font-bold tracking-wide truncate">
               {schoolName}
@@ -214,7 +217,11 @@ export function LoginView({
               />
             ) : (
               <div className="aspect-[4/3] w-full bg-gradient-to-br from-emerald-50 via-white to-sky-50 flex flex-col items-center justify-center p-8 text-center">
-                <BookOpenCheck className="w-12 h-12 text-[#009b4d] mb-3" />
+                <img
+                  src="/assets/aistudio/Kabupaten_mempawah_29057062.png"
+                  alt={`Logo ${schoolName}`}
+                  className="w-16 h-16 object-contain mb-3"
+                />
                 <p className="font-display text-lg font-bold text-slate-900">
                   {schoolName}
                 </p>

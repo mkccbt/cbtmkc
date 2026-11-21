@@ -1,7 +1,6 @@
 import { ReactNode, useState } from 'react';
 import {
   BarChart3,
-  BookOpenCheck,
   Building2,
   ClipboardList,
   Database,
@@ -101,8 +100,12 @@ export function TeacherLayout({
       >
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5 whitespace-nowrap">
-            <div className="w-8 h-8 rounded-lg bg-blue-700 text-white flex items-center justify-center shrink-0">
-              <BookOpenCheck className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0">
+              <img
+                src="/assets/aistudio/Kabupaten_mempawah_29057062.png"
+                alt="Logo Sekolah MKC CBT"
+                className="w-full h-full object-contain"
+              />
             </div>
             <span className="font-display text-base font-bold text-slate-900 tracking-tight">
               MKC CBT
