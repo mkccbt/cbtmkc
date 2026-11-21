@@ -6,6 +6,7 @@ export interface ParsedImportedQuestion {
   rowLabel: string;
   isExample: boolean;
   subject: string;
+  hasExplicitSubject?: boolean;
   type: QuestionType;
   prompt: string;
   imageData: string | null;
@@ -558,6 +559,7 @@ export async function parseWordDocxFile(
         rowLabel: rawNo || `Baris ${r}`,
         isExample,
         subject: rawSubject || defaults.subject.trim() || 'Umum',
+        hasExplicitSubject: Boolean(rawSubject.trim()),
         type,
         prompt: finalPrompt,
         imageData,
@@ -622,6 +624,7 @@ export async function parseWordDocxFile(
         rowLabel: current.rowLabel,
         isExample: false,
         subject: defaults.subject.trim() || 'Umum',
+        hasExplicitSubject: false,
         type,
         prompt: promptText,
         imageData: current.imageData,

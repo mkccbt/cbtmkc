@@ -14,11 +14,12 @@ interface SchoolSettingsViewProps {
   onUpdated?: (settings: SchoolSettings) => void;
 }
 
+const LOCKED_FOOTER_TEXT = '© Fikrul MKC · MKC CBT';
+
 export function SchoolSettingsView({ onUpdated }: SchoolSettingsViewProps) {
   const [schoolName, setSchoolName] = useState('SDN 09 SADANIANG');
   const [examTheme, setExamTheme] = useState('Tes Akhir Semester');
   const [academicYear, setAcademicYear] = useState('Tahun Pelajaran 2026/2027');
-  const [footerText, setFooterText] = useState('© Fikrul MKC · MKC CBT');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,7 +36,6 @@ export function SchoolSettingsView({ onUpdated }: SchoolSettingsViewProps) {
       setSchoolName(res.settings.schoolName);
       setExamTheme(res.settings.examTheme);
       setAcademicYear(res.settings.academicYear);
-      setFooterText(res.settings.footerText);
     } catch (err: any) {
       setError(err.message || 'Gagal memuat pengaturan sekolah.');
     } finally {
@@ -61,14 +61,12 @@ export function SchoolSettingsView({ onUpdated }: SchoolSettingsViewProps) {
             schoolName,
             examTheme,
             academicYear,
-            footerText,
           }),
         }
       );
       setSchoolName(res.settings.schoolName);
       setExamTheme(res.settings.examTheme);
       setAcademicYear(res.settings.academicYear);
-      setFooterText(res.settings.footerText);
       setSuccess(
         'Pengaturan nama sekolah dan tema ujian berhasil disimpan dan langsung aktif di halaman depan.'
       );
@@ -84,7 +82,6 @@ export function SchoolSettingsView({ onUpdated }: SchoolSettingsViewProps) {
     setSchoolName('SDN 09 SADANIANG');
     setExamTheme('Tes Akhir Semester');
     setAcademicYear('Tahun Pelajaran 2026/2027');
-    setFooterText('© Fikrul MKC · MKC CBT');
     setSuccess(null);
     setError(null);
   };
@@ -145,7 +142,7 @@ export function SchoolSettingsView({ onUpdated }: SchoolSettingsViewProps) {
             )}
           </div>
           <div className="px-5 py-2.5 bg-white text-xs text-slate-500 flex items-center justify-between">
-            <span>{footerText || '© MKC CBT'}</span>
+            <span>{LOCKED_FOOTER_TEXT}</span>
             <span>Status CBT · Sinkronisasi Server Aktif</span>
           </div>
         </div>
@@ -208,7 +205,7 @@ export function SchoolSettingsView({ onUpdated }: SchoolSettingsViewProps) {
               </p>
             </div>
 
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Tahun Pelajaran / Keterangan
               </label>
@@ -218,20 +215,6 @@ export function SchoolSettingsView({ onUpdated }: SchoolSettingsViewProps) {
                 value={academicYear}
                 onChange={(e) => setAcademicYear(e.target.value)}
                 placeholder="Contoh: Tahun Pelajaran 2026/2027"
-                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Teks Hak Cipta / Footer Portal
-              </label>
-              <input
-                type="text"
-                maxLength={120}
-                value={footerText}
-                onChange={(e) => setFooterText(e.target.value)}
-                placeholder="Contoh: © Fikrul MKC · MKC CBT"
                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
               />
             </div>

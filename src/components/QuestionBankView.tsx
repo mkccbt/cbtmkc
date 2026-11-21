@@ -82,6 +82,7 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | QuestionType>('all');
   const [teacherFilter, setTeacherFilter] = useState<string>('all');
 
@@ -152,11 +153,56 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'id'));
   }, [questions]);
 
+  const questionsByTeacher = useMemo(() => {
+    if (!isSuperAdmin || teacherFilter === 'all') return questions;
+    return questions.filter((q) => String(q.teacherId) === teacherFilter);
+  }, [questions, isSuperAdmin, teacherFilter]);
+
+  const subjectOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const q of questionsByTeacher) {
+      const normalized = (q.subject || '').trim();
+      if (!normalized) continue;
+      counts.set(normalized, (counts.get(normalized) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'id'));
+  }, [questionsByTeacher]);
+
+  const allKnownSubjects = useMemo(() => {
+    const set = new Set<string>();
+    for (const q of questions) {
+      const normalized = (q.subject || '').trim();
+      if (normalized) set.add(normalized);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'id'));
+  }, [questions]);
+
+  useEffect(() => {
+    if (
+      subjectFilter !== 'all' &&
+      !subjectOptions.some((s) => s.name === subjectFilter)
+    ) {
+      setSubjectFilter('all');
+    }
+  }, [subjectFilter, subjectOptions]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return questions.filter((item) => {
       if (typeFilter !== 'all' && item.type !== typeFilter) return false;
-      if (isSuperAdmin && teacherFilter !== 'all' && String(item.teacherId) !== teacherFilter) {
+      if (
+        isSuperAdmin &&
+        teacherFilter !== 'all' &&
+        String(item.teacherId) !== teacherFilter
+      ) {
+        return false;
+      }
+      if (
+        subjectFilter !== 'all' &&
+        (item.subject || '').trim() !== subjectFilter
+      ) {
         return false;
       }
       if (!q) return true;
@@ -167,11 +213,13 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
         (item.teacherUsername || '').toLowerCase().includes(q)
       );
     });
-  }, [questions, search, typeFilter, isSuperAdmin, teacherFilter]);
+  }, [questions, search, subjectFilter, typeFilter, isSuperAdmin, teacherFilter]);
 
   const openCreateModal = () => {
     setEditingId(null);
-    setSubject('Informatika & Literasi Digital');
+    setSubject(
+      subjectFilter !== 'all' ? subjectFilter : 'Informatika & Literasi Digital'
+    );
     setType('pg');
     setPrompt('');
     setImageData('');
@@ -312,6 +360,9 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
     setRawImportFile(null);
     setParsedItems([]);
     setSelectedImportIds([]);
+    if (subjectFilter !== 'all') {
+      setImportSubject(subjectFilter);
+    }
     setImportModalOpen(true);
   };
 
@@ -393,24 +444,38 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
     setImportError(null);
     setImportingWord(true);
     try {
+      const mappedQuestions = chosen.map((item) => ({
+        subject: item.hasExplicitSubject
+          ? item.subject
+          : importSubject.trim() || item.subject,
+        type: item.type,
+        prompt: item.prompt,
+        imageData: item.imageData,
+        options: item.type === 'pg' ? item.options : undefined,
+        correctAnswer: item.correctAnswer,
+        points: item.points,
+        difficulty: importDifficulty,
+      }));
       const res = await api.request<{ importedCount: number }>(
         '/api/teacher/questions/import',
         {
           method: 'POST',
           body: JSON.stringify({
-            questions: chosen.map((item) => ({
-              subject: importSubject.trim() || item.subject,
-              type: item.type,
-              prompt: item.prompt,
-              imageData: item.imageData,
-              options: item.type === 'pg' ? item.options : undefined,
-              correctAnswer: item.correctAnswer,
-              points: item.points,
-              difficulty: importDifficulty,
-            })),
+            questions: mappedQuestions,
           }),
         }
       );
+      const importedSubjects = Array.from(
+        new Set(mappedQuestions.map((q) => q.subject.trim()).filter(Boolean))
+      );
+      if (
+        subjectFilter !== 'all' &&
+        !importedSubjects.includes(subjectFilter)
+      ) {
+        setSubjectFilter(
+          importedSubjects.length === 1 ? importedSubjects[0] : 'all'
+        );
+      }
       setImportModalOpen(false);
       setImportSuccess(
         `Berhasil mengimpor ${res.importedCount} butir soal dari Word ke Bank Soal.`
@@ -481,8 +546,8 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div className="flex flex-col sm:flex-row gap-3 flex-1">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex flex-col sm:flex-row gap-3 flex-1 flex-wrap">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -497,11 +562,28 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
             />
           </div>
 
+          <select
+            aria-label="Pilih Mata Pelajaran"
+            value={subjectFilter}
+            onChange={(e) => setSubjectFilter(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600 min-w-[210px]"
+          >
+            <option value="all">
+              Semua Mata Pelajaran ({questionsByTeacher.length} soal)
+            </option>
+            {subjectOptions.map((subj) => (
+              <option key={subj.name} value={subj.name}>
+                {subj.name} ({subj.count} soal)
+              </option>
+            ))}
+          </select>
+
           {isSuperAdmin && (
             <select
+              aria-label="Filter Guru"
               value={teacherFilter}
               onChange={(e) => setTeacherFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white"
+              className="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
               <option value="all">Semua Guru ({questions.length} soal)</option>
               {teacherOptions.map((t) => (
@@ -692,10 +774,16 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
                   <input
                     type="text"
                     required
+                    list="bank-soal-subject-list"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
                   />
+                  <datalist id="bank-soal-subject-list">
+                    {allKnownSubjects.map((subj) => (
+                      <option key={subj} value={subj} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -988,11 +1076,17 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
                 </label>
                 <input
                   type="text"
+                  list="bank-soal-subject-list-import"
                   value={importSubject}
                   onChange={(e) => setImportSubject(e.target.value)}
                   placeholder="Contoh: Matematika Wajib"
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
                 />
+                <datalist id="bank-soal-subject-list-import">
+                  {allKnownSubjects.map((subj) => (
+                    <option key={subj} value={subj} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1131,6 +1225,12 @@ export function QuestionBankView({ user }: { user: AuthUser }) {
                                 <span aria-hidden="true">·</span>
                                 <span className="font-semibold text-slate-800">
                                   {TYPE_LABELS[item.type]}
+                                </span>
+                                <span aria-hidden="true">·</span>
+                                <span className="text-slate-700 font-medium">
+                                  {item.hasExplicitSubject
+                                    ? item.subject
+                                    : importSubject.trim() || item.subject}
                                 </span>
                                 <span aria-hidden="true">·</span>
                                 <span>Bobot {item.points} poin</span>

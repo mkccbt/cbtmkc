@@ -278,7 +278,6 @@ app.put(
       const schoolName = sanitizeText(req.body?.schoolName, 120);
       const examTheme = sanitizeText(req.body?.examTheme, 120);
       const academicYear = sanitizeText(req.body?.academicYear || '', 80);
-      const footerText = sanitizeText(req.body?.footerText || '', 120);
 
       if (!schoolName || schoolName.length < 2) {
         return res.status(400).json({ error: 'Nama sekolah wajib diisi (minimal 2 karakter).' });
@@ -291,7 +290,6 @@ app.put(
         schoolName,
         examTheme,
         academicYear,
-        footerText: footerText || '© Fikrul MKC · MKC CBT',
       });
       res.json({ settings });
     } catch (error: any) {

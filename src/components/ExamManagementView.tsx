@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CheckSquare,
   Copy,
@@ -57,6 +57,7 @@ export function ExamManagementView() {
   const [selectedQIds, setSelectedQIds] = useState<number[]>([]);
   const [targetClasses, setTargetClasses] = useState<string[]>([]);
   const [customClassInput, setCustomClassInput] = useState('');
+  const [showAllBankSubjects, setShowAllBankSubjects] = useState(false);
 
   const loadAll = async () => {
     setLoading(true);
@@ -81,6 +82,34 @@ export function ExamManagementView() {
     loadAll();
   }, []);
 
+  const bankSubjectOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const q of questions) {
+      const normalized = (q.subject || '').trim();
+      if (!normalized) continue;
+      counts.set(normalized, (counts.get(normalized) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'id'));
+  }, [questions]);
+
+  const modalSubjectOptions = useMemo(() => {
+    const current = subject.trim();
+    if (
+      current &&
+      !bankSubjectOptions.some((s) => s.name === current)
+    ) {
+      return [...bankSubjectOptions, { name: current, count: 0 }];
+    }
+    return bankSubjectOptions;
+  }, [bankSubjectOptions, subject]);
+
+  const modalQuestions = useMemo(() => {
+    if (showAllBankSubjects || !subject.trim()) return questions;
+    return questions.filter((q) => (q.subject || '').trim() === subject.trim());
+  }, [questions, showAllBankSubjects, subject]);
+
   const generateCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let out = 'CBT';
@@ -90,20 +119,36 @@ export function ExamManagementView() {
     setExamCode(out);
   };
 
+  const handleSubjectChange = (nextSubject: string) => {
+    setSubject(nextSubject);
+    const matchingIds = questions
+      .filter((q) => (q.subject || '').trim() === nextSubject.trim())
+      .map((q) => q.id);
+    setSelectedQIds(matchingIds);
+    setQuestionCount(Math.max(1, matchingIds.length));
+  };
+
   const openCreateModal = () => {
     const now = new Date();
     const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const initialSubject = bankSubjectOptions[0]?.name || '';
+    const matchingIds = initialSubject
+      ? questions
+          .filter((q) => (q.subject || '').trim() === initialSubject)
+          .map((q) => q.id)
+      : [];
+
     setEditingId(null);
     setTitle('');
-    setSubject('Informatika & Literasi Digital');
+    setSubject(initialSubject);
     generateCode();
     setDescription('');
     setDurationMinutes(45);
     setStartTime(toLocalDatetimeInput(now));
     setEndTime(toLocalDatetimeInput(nextWeek));
-    const allIds = questions.map((q) => q.id);
-    setSelectedQIds(allIds);
-    setQuestionCount(Math.max(1, allIds.length));
+    setSelectedQIds(matchingIds);
+    setQuestionCount(Math.max(1, matchingIds.length));
+    setShowAllBankSubjects(false);
     setKkm(75);
     setShuffleQuestions(true);
     setShuffleOptions(true);
@@ -145,6 +190,7 @@ export function ExamManagementView() {
     setViolationAction(exam.violationAction);
     setProctorPin(exam.proctorPin);
     setSelectedQIds(exam.questionIds || []);
+    setShowAllBankSubjects(false);
     setTargetClasses(exam.targetClasses || []);
     setCustomClassInput('');
     setFormError(null);
@@ -446,15 +492,32 @@ export function ExamManagementView() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Mata Pelajaran
+                    Mata Pelajaran (dari Bank Soal)
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
                     value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
-                  />
+                    onChange={(e) => handleSubjectChange(e.target.value)}
+                    disabled={modalSubjectOptions.length === 0}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    {modalSubjectOptions.length === 0 ? (
+                      <option value="">
+                        Belum ada mata pelajaran di Bank Soal
+                      </option>
+                    ) : (
+                      modalSubjectOptions.map((subj) => (
+                        <option key={subj.name} value={subj.name}>
+                          {subj.name} ({subj.count} soal)
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  {bankSubjectOptions.length === 0 && (
+                    <p className="text-xs text-amber-700 mt-1">
+                      Tambahkan atau unggah soal terlebih dahulu di menu Bank Soal agar mata pelajaran muncul di sini.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -779,34 +842,58 @@ export function ExamManagementView() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-xs font-semibold text-slate-700">
                     Pilih Soal dari Bank Soal ({selectedQIds.length} dipilih)
                   </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSelectedQIds(
-                        selectedQIds.length === questions.length
-                          ? []
-                          : questions.map((q) => q.id)
-                      )
-                    }
-                    className="text-xs font-semibold text-blue-700 cursor-pointer"
-                  >
-                    {selectedQIds.length === questions.length
-                      ? 'Kosongkan Pilihan'
-                      : 'Pilih Semua Soal'}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {questions.length > 0 && subject.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllBankSubjects((prev) => !prev)}
+                        className="text-xs font-medium text-slate-600 hover:text-slate-900 cursor-pointer"
+                      >
+                        {showAllBankSubjects
+                          ? `Filter: ${subject}`
+                          : 'Tampilkan Semua Mapel'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const visibleIds = modalQuestions.map((q) => q.id);
+                        const allVisibleSelected =
+                          visibleIds.length > 0 &&
+                          visibleIds.every((id) => selectedQIds.includes(id));
+                        if (allVisibleSelected) {
+                          setSelectedQIds((prev) =>
+                            prev.filter((id) => !visibleIds.includes(id))
+                          );
+                        } else {
+                          setSelectedQIds((prev) =>
+                            Array.from(new Set([...prev, ...visibleIds]))
+                          );
+                        }
+                      }}
+                      className="text-xs font-semibold text-blue-700 cursor-pointer"
+                    >
+                      {modalQuestions.length > 0 &&
+                      modalQuestions.every((q) => selectedQIds.includes(q.id))
+                        ? 'Kosongkan Pilihan'
+                        : 'Pilih Semua Soal'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="max-h-52 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
-                  {questions.length === 0 ? (
+                  {modalQuestions.length === 0 ? (
                     <div className="p-4 text-xs text-slate-500 text-center">
-                      Bank soal masih kosong. Tambahkan soal di menu Bank Soal terlebih dahulu.
+                      {questions.length === 0
+                        ? 'Bank soal masih kosong. Tambahkan soal di menu Bank Soal terlebih dahulu.'
+                        : `Belum ada soal untuk mata pelajaran "${subject}" di Bank Soal.`}
                     </div>
                   ) : (
-                    questions.map((q) => {
+                    modalQuestions.map((q) => {
                       const checked = selectedQIds.includes(q.id);
                       return (
                         <button

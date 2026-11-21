@@ -1706,9 +1706,12 @@ export async function getTeacherViolationLogs(
   };
 }
 
+const LOCKED_FOOTER_TEXT = '© Fikrul MKC · MKC CBT';
+
 export async function getSchoolSettings() {
   const store = getStore();
   if (store.schoolSettings[0]) {
+    store.schoolSettings[0].footerText = LOCKED_FOOTER_TEXT;
     return store.schoolSettings[0];
   }
   const created = {
@@ -1716,7 +1719,7 @@ export async function getSchoolSettings() {
     schoolName: 'SDN 09 SADANIANG',
     examTheme: 'Tes Akhir Semester',
     academicYear: 'Tahun Pelajaran 2026/2027',
-    footerText: '© Fikrul MKC · MKC CBT',
+    footerText: LOCKED_FOOTER_TEXT,
     updatedAt: new Date(),
   };
   store.schoolSettings.push(created);
@@ -1728,13 +1731,12 @@ export async function updateSchoolSettings(input: {
   schoolName: string;
   examTheme: string;
   academicYear: string;
-  footerText: string;
 }) {
   const existing = await getSchoolSettings();
   existing.schoolName = input.schoolName.trim();
   existing.examTheme = input.examTheme.trim();
   existing.academicYear = input.academicYear.trim();
-  existing.footerText = input.footerText.trim() || '© MKC CBT';
+  existing.footerText = LOCKED_FOOTER_TEXT;
   existing.updatedAt = new Date();
   await saveStore();
   return existing;
@@ -1759,7 +1761,7 @@ export async function getPublicPortalInfo() {
     schoolName: settings.schoolName,
     examTheme: settings.examTheme,
     academicYear: settings.academicYear,
-    footerText: settings.footerText,
+    footerText: LOCKED_FOOTER_TEXT,
     updatedAt: settings.updatedAt,
     serverTime: new Date().toISOString(),
     stats: {
