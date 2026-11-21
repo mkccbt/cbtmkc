@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { AdminAccountSettingsView } from './components/AdminAccountSettingsView';
 import { AuditLogView } from './components/AuditLogView';
 import { ExamManagementView } from './components/ExamManagementView';
 import { ExamModeSettingsView } from './components/ExamModeSettingsView';
@@ -180,6 +181,25 @@ export default function App() {
                 : null
             );
             loadPortalInfo();
+          }}
+        />
+      )}
+      {teacherTab === 'admin-account' && user.role === 'super_admin' && (
+        <AdminAccountSettingsView
+          user={user}
+          onAccountUpdated={(updated) => {
+            setUser(updated.user);
+            const raw = sessionStorage.getItem(SESSION_KEY);
+            if (raw || updated.token.startsWith('cbt.')) {
+              api.setCredentials(updated.token, updated.csrfToken);
+              sessionStorage.setItem(
+                SESSION_KEY,
+                JSON.stringify({
+                  token: updated.token,
+                  csrfToken: updated.csrfToken,
+                })
+              );
+            }
           }}
         />
       )}

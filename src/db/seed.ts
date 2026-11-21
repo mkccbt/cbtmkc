@@ -19,7 +19,9 @@ function ensureSchoolSettingsSeeded() {
 
 async function ensureSuperAdminSeeded() {
   const store = getStore();
-  const existingAdmin = store.users.find((u) => u.username === 'webadmin');
+  const existingAdmin = store.users.find(
+    (u) => u.role === 'super_admin' || u.username === 'webadmin'
+  );
   if (!existingAdmin) {
     const adminPasswordHash = await bcrypt.hash('webadmin123', 10);
     store.users.push({

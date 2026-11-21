@@ -66,6 +66,60 @@ export async function getUserByUsername(username: string) {
   return store.users.find((u) => u.username === target) || null;
 }
 
+export async function updateSuperAdminCredentials(input: {
+  userId: number;
+  username: string;
+  name?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}) {
+  const store = getStore();
+  const user = store.users.find(
+    (u) => u.id === input.userId && u.role === 'super_admin'
+  );
+  if (!user) {
+    throw new Error('Akun Super Admin tidak ditemukan.');
+  }
+
+  if (user.passwordHash) {
+    if (!input.currentPassword) {
+      throw new Error('Kata sandi saat ini wajib diisi untuk menyimpan perubahan.');
+    }
+    const valid = await bcrypt.compare(input.currentPassword, user.passwordHash);
+    if (!valid) {
+      throw new Error('Kata sandi saat ini tidak cocok.');
+    }
+  }
+
+  const cleanUsername = input.username.toLowerCase().trim();
+  const duplicate = store.users.find(
+    (u) => u.id !== user.id && u.username.toLowerCase() === cleanUsername
+  );
+  if (duplicate) {
+    throw new Error('Username sudah digunakan oleh akun lain.');
+  }
+
+  user.username = cleanUsername;
+  if (input.name && input.name.trim()) {
+    user.name = input.name.trim();
+  }
+  if (input.newPassword && input.newPassword.length > 0) {
+    user.passwordHash = await bcrypt.hash(input.newPassword, 10);
+  }
+
+  await saveStore();
+
+  return {
+    id: user.id,
+    uid: user.uid,
+    username: user.username,
+    name: user.name,
+    email: user.email,
+    role: 'super_admin' as const,
+    className: user.className,
+  };
+}
+
 export async function getOrCreateFirebaseUser(
   uid: string,
   email: string,

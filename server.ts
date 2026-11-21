@@ -24,6 +24,7 @@ import {
   getTeacherResults,
   getTeacherSessionDetail,
   getTeacherViolationLogs,
+  getUserById,
   getUserByUsername,
   gradeSessionEssays,
   importStudentAccountsBatch,
@@ -40,6 +41,7 @@ import {
   updateExam,
   updateQuestion,
   updateSchoolSettings,
+  updateSuperAdminCredentials,
   verifyProctorPinAndUnlock,
 } from './src/db/repository.ts';
 import { getStorageDiagnostics } from './src/db/localStore.ts';
@@ -294,6 +296,91 @@ app.put(
       res.json({ settings });
     } catch (error: any) {
       res.status(500).json({ error: error.message || 'Gagal menyimpan pengaturan sekolah.' });
+    }
+  }
+);
+
+app.get(
+  '/api/admin/account',
+  requireAuth,
+  requireRole('super_admin'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await getUserById(req.authUser!.id);
+      if (!user || user.role !== 'super_admin') {
+        return res.status(404).json({ error: 'Akun Super Admin tidak ditemukan.' });
+      }
+      res.json({
+        account: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          email: user.email,
+          hasPassword: Boolean(user.passwordHash),
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || 'Gagal memuat akun Super Admin.' });
+    }
+  }
+);
+
+app.put(
+  '/api/admin/account',
+  requireAuth,
+  requireRole('super_admin'),
+  requireCsrf,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const username = sanitizeText(req.body?.username, 40)
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]/g, '');
+      const name = sanitizeText(req.body?.name || '', 100);
+      const currentPassword = sanitizeText(req.body?.currentPassword || '', 128);
+      const newPassword = sanitizeText(req.body?.newPassword || '', 64);
+
+      if (!username || username.length < 3) {
+        return res.status(400).json({
+          error: 'Username Super Admin minimal 3 karakter (huruf, angka, titik, garis bawah, atau tanda hubung).',
+        });
+      }
+      if (newPassword && newPassword.length < 6) {
+        return res.status(400).json({
+          error: 'Kata sandi baru minimal 6 karakter.',
+        });
+      }
+
+      const updatedUser = await updateSuperAdminCredentials({
+        userId: req.authUser!.id,
+        username,
+        name: name || undefined,
+        currentPassword: currentPassword || undefined,
+        newPassword: newPassword || undefined,
+      });
+
+      const token = signSessionToken({
+        userId: updatedUser.id,
+        uid: updatedUser.uid,
+        username: updatedUser.username,
+        name: updatedUser.name,
+        role: updatedUser.role,
+      });
+      const csrfToken = issueCsrfToken(updatedUser.uid);
+
+      res.json({
+        user: updatedUser,
+        token,
+        csrfToken,
+      });
+    } catch (error: any) {
+      const msg = error?.message || 'Gagal memperbarui akun Super Admin.';
+      const status =
+        msg.includes('sudah digunakan')
+          ? 409
+          : msg.includes('tidak cocok') || msg.includes('wajib diisi')
+          ? 400
+          : 500;
+      res.status(status).json({ error: msg });
     }
   }
 );

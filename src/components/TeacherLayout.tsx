@@ -5,6 +5,7 @@ import {
   Building2,
   ClipboardList,
   Database,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -25,6 +26,7 @@ export type TeacherTab =
   | 'audit-log'
   | 'teachers'
   | 'school-settings'
+  | 'admin-account'
   | 'students';
 
 interface TeacherLayoutProps {
@@ -52,6 +54,12 @@ const NAV_ITEMS: Array<{
     id: 'school-settings',
     label: 'Pengaturan Sekolah',
     icon: Building2,
+    superAdminOnly: true,
+  },
+  {
+    id: 'admin-account',
+    label: 'Pengaturan Super Admin',
+    icon: KeyRound,
     superAdminOnly: true,
   },
   { id: 'students', label: 'Akun Siswa', icon: Users },
